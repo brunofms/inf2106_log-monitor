@@ -1,0 +1,25 @@
+module scs{
+	module demos{
+		module logmonitor {
+			interface LogMonitor {
+				void setId(in long identifier);
+				long getId();
+				void setMonitorInterval(in long interval);
+				long getMonitorInterval();
+				void setLogFile(in string logfile);
+				string getLogFile();
+			  	void publishLog();
+			};
+			interface EventSink {
+				void push(in any event);
+				void disconnect();
+			};
+			interface LogViewer {
+				void setId(in long identifier);
+				long getId();
+				void setLogFile(in string logfile);
+				string getLogFile();
+			};
+		};
+	};
+};
