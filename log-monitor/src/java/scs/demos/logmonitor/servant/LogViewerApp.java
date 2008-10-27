@@ -56,7 +56,8 @@ public class LogViewerApp {
 	private static final String EXEC_NODE_NAME = "ExecutionNode";
 	private static final String EXEC_NODE_FACET = "scs::execution_node::ExecutionNode";
 	// CHANGED
-	private static final String CONTAINER_NAME = "LogMonitorContainer";
+	private static final String CONTAINER_NAME = "LogViewerContainer";
+	private static final String EVCONTAINER_NAME = "LogMonitorContainer";
 
 	private ExecutionNode[] execNode = null;
 	private IComponent logMonitorComp = null;
@@ -183,7 +184,7 @@ public class LogViewerApp {
 
 		//Retrieving LogMonitor/EventChannel Container
 		IComponent evContainer;
-		evContainer = execNode[0].getContainer(CONTAINER_NAME);
+		evContainer = execNode[0].getContainer(EVCONTAINER_NAME);
 
 		//Retrieving LogViewer Container
 		IComponent viewerContainer;
@@ -329,8 +330,8 @@ public class LogViewerApp {
 			//Run App
 			app.run(logFilename);
 			
-			// CHANGED
-			Thread.sleep(100000);
+			System.out.print("Press any key to stop monitoring ... ");
+			opt = br.readLine();
 			
 			long end = System.currentTimeMillis();
 			
