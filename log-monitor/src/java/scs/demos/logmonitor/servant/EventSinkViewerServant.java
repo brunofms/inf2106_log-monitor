@@ -19,20 +19,20 @@ public class EventSinkViewerServant extends EventSinkPOA {
 
 	public void push(Any event) {
 		
-		//Retrieving LogViewer Facet
-		LogViewer viewer = LogViewerHelper.narrow(logviewer.getFacet("scs::demos::logmonitor::LogViewer"));
-		//Getting log file path
-		String logfile = viewer.getLogFile();
+		try {		
+			//Retrieving LogViewer Facet
+			LogViewer viewer = LogViewerHelper.narrow(logviewer.getFacet("scs::demos::logmonitor::LogViewer"));
 		
-		PrintStream ps = null;
-		try {
-			ps = new PrintStream(new FileOutputStream(logfile),true);
+			// Converging log messages
+			String msg = event.extract_string();
+			BufferedWriter out = new BufferedWriter(new FileWriter(viewer.getLogFile(), true));
+			System.out.println(msg);
+			out.write(msg);
+			out.close();
+
 		} catch (IOException e) {
-
-		}	
-
-		//ps.print(event.extract_string() + "\n");
-		ps.close();
+			e.printStackTrace();
+		}
 	}
 	
 	public void disconnect() {
