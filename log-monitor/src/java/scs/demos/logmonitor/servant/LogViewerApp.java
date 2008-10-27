@@ -55,6 +55,7 @@ public class LogViewerApp {
 
 	private static final String EXEC_NODE_NAME = "ExecutionNode";
 	private static final String EXEC_NODE_FACET = "scs::execution_node::ExecutionNode";
+	// CHANGED
 	private static final String CONTAINER_NAME = "LogMonitorContainer";
 
 	private ExecutionNode[] execNode = null;
@@ -328,7 +329,8 @@ public class LogViewerApp {
 			//Run App
 			app.run(logFilename);
 			
-			Thread.sleep(10000);
+			// CHANGED
+			Thread.sleep(100000);
 			
 			long end = System.currentTimeMillis();
 			

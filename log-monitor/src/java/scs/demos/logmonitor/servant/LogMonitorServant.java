@@ -20,6 +20,7 @@ public class LogMonitorServant extends LogMonitorPOA {
 
 	private int identifier;
 	private int interval;
+	private boolean tailing;
 	private String logfile;
 	private LogMonitorComponent logmonitor = null;
 	private IReceptacles infoReceptacle = null;
@@ -54,49 +55,70 @@ public class LogMonitorServant extends LogMonitorPOA {
 	public String getLogFile(){
 		return this.logfile;
 	}
+	
+	public void setTailing(boolean tail){
+		this.tailing = tail;
+	}
 
 	public void publishLog() {
-		infoReceptacle = IReceptaclesHelper.narrow(logmonitor.getFacetByName("infoReceptacle"));
-
-		String line = "";
 		try {
-			FileReader input = new FileReader(this.logfile);
-			BufferedReader bufRead = new BufferedReader(input);
-			
-            int count = 0;	// Line number of count 
-            
-            line = bufRead.readLine();
-            count++;
-            /*
-            while (line != null){
-                System.out.println(count+": "+line);
-                line = bufRead.readLine();
-                count++;
-            }
-            */
-            bufRead.close();
-			
-        }catch (ArrayIndexOutOfBoundsException e){
-			System.out.println("Usage: java ReadFile filename\n");			
-		}catch (IOException e){
-            e.printStackTrace();
-        }
+			infoReceptacle = IReceptaclesHelper.narrow(logmonitor.getFacetByName("infoReceptacle"));
 
-		Any logMessage = ORB.init().create_any();
-		logMessage.insert_string(line);
+			// Start tailing
+			this.tailing = true;
+			
+			BufferedInputStream bis = new
+				BufferedInputStream(new FileInputStream(this.logfile));
+			int length = -1;
+			
+			while( this.tailing ) {
+				try {
+					length = bis.available();
+					
+					if(length == -1)
+						throw new IOException("file ended");
+					
+					if(length <= 0)
+						continue;
+					
+					byte [] data = new byte[length];
+					
+					if(bis.read(data, 0, length ) == -1)
+						continue;
+						
+					String msg = new String(data);
+					
+					// Deliver file text to the connected receptacles
+					if(!msg.equals("")) {
+						System.out.println(new String(data));
+					
+						Any logMessage = ORB.init().create_any();
 
-		try {
-			conns = infoReceptacle.getConnections("LogMonitor");
-		} catch (InvalidName e) {
+						logMessage.insert_string(new String(data));
+					
+						try {
+							conns = infoReceptacle.getConnections("LogMonitor");
+						} catch (InvalidName e) {
+							e.printStackTrace();
+						}
+					
+						for (int i = 0; i < conns.length; i++) {
+							EventSink eventChannelFacet = EventSinkHelper.narrow( conns[i].objref );
+							eventChannelFacet.push(logMessage);
+						}
+					}
+					
+					Thread.sleep(interval);
+				
+				} catch( Exception e ) {
+				}
+			}
+		}
+		catch( Exception e )
+		{
 			e.printStackTrace();
 		}
-
-		System.out.println("LogMonitor " + identifier + " publish log");
-
-		for (int i = 0; i < conns.length; i++) {
-			EventSink eventChannelFacet = EventSinkHelper.narrow( conns[i].objref );
-			eventChannelFacet.push(logMessage);
-		}
+		
 	}
 }
 

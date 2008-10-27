@@ -31,7 +31,7 @@ public class EventSinkViewerServant extends EventSinkPOA {
 
 		}	
 
-		ps.print(event.extract_string() + "\n");
+		//ps.print(event.extract_string() + "\n");
 		ps.close();
 	}
 	

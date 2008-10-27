@@ -284,6 +284,7 @@ public class LogMonitorApp {
 		String host = "localhost";
 		String port = "1050";
 		String logFilename = "";
+		Integer logMonitorInterval = 120000;
 		
 		try {
 			
@@ -306,16 +307,23 @@ public class LogMonitorApp {
 				System.exit(1);
 			}
 			logFilename = opt;
+			opt = "";
+			System.out.print("Log monitor interval in seconds (default is 120): ");
+			opt = br.readLine();
+			if(!opt.equals("")) {
+				logMonitorInterval = Integer.parseInt(opt)*1000;
+			}
 			
 			long start = System.currentTimeMillis();
 		
 			LogMonitorApp app = new LogMonitorApp(host, port);
 		
 			//Sleep for debug
+			// CHANGED
 			Thread.sleep(10000);
 			
 			//Run App
-			app.run(logFilename);
+			app.run(logFilename, logMonitorInterval);
 			
 			long end = System.currentTimeMillis();
 			System.out.println("Tempo total de execucao:" + (end - start));
@@ -331,18 +339,26 @@ public class LogMonitorApp {
 
 	}
 
-	public void run(String logfile) throws InterruptedException {
+	public void run(String logfile, Integer interval ) throws InterruptedException {
 		//Retrieving Log Monitor Facet
 		LogMonitor log = LogMonitorHelper.narrow(logMonitorComp.getFacetByName("LogMonitor"));
+		
 		//Setting log file path, passed via arguments
 		log.setLogFile(logfile);
+		log.setMonitorInterval(interval);
+		
 		//Publish log into event channel
 		log.publishLog();
-
 	}
 
 	public void stop() {
 		try{
+			//Retrieving Log Monitor Facet
+			LogMonitor log = LogMonitorHelper.narrow(logMonitorComp.getFacetByName("LogMonitor"));
+			
+			//Stop tail and close tailed file
+			log.setTailing(false);
+			
 			execNode.stopContainer(CONTAINER_NAME); 
 			Thread.sleep(1000);
 		} catch (Exception e ) {

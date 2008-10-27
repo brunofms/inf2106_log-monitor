@@ -9,6 +9,7 @@ module scs{
 				void setLogFile(in string logfile);
 				string getLogFile();
 			  	void publishLog();
+				void setTailing(in boolean tail);
 			};
 			interface EventSink {
 				void push(in any event);
