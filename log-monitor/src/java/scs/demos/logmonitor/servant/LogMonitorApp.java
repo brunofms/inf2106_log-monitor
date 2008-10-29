@@ -42,7 +42,6 @@ import scs.core.StartupFailed;
 import scs.core.FacetDescription;
 import scs.demos.logmonitor.LogMonitor;
 import scs.demos.logmonitor.LogMonitorHelper;
-import scs.demos.logmonitor.servant.EventSinkViewerServant;
 import scs.execution_node.ContainerAlreadyExists;
 import scs.execution_node.ExecutionNode;
 import scs.execution_node.ExecutionNodeHelper;
@@ -55,15 +54,16 @@ public class LogMonitorApp {
 
 	private static final String EXEC_NODE_NAME = "ExecutionNode";
 	private static final String EXEC_NODE_FACET = "scs::execution_node::ExecutionNode";
+	// CHANGED
 	private static final String CONTAINER_NAME = "LogMonitorContainer";
+	private static final String EVCONTAINER_NAME = "EventChannelContainer";
 
-	private ExecutionNode execNode = null;
+	private ExecutionNode[] execNode = null;
 	private IComponent logMonitorComp = null;
-	private IComponent logViewerComp = null;
 	private String exception;
 
-	public LogMonitorApp(String host, String port) {
-		if (!initialize(host, port))
+	public LogMonitorApp(String evHost, String evPort, String monitorHost, String monitorPort) {
+		if (!initialize(evHost, evPort, monitorHost, monitorPort))
 			System.err.println("Erro iniciando a aplicacao");
 	}
 
@@ -92,6 +92,7 @@ public class LogMonitorApp {
 		}
 		return true;
 	}
+
 	
 	
 	/* Cria um component no container associado a loader*/
@@ -117,77 +118,127 @@ public class LogMonitorApp {
 	/**
 		* @param args
 		*/
-	private boolean initialize(String host, String port) {
+	private boolean initialize(String evHost, String evPort, String monitorHost, String monitorPort) {
 
-		String corbaname = null;
-
+		String evCorbaname = null;
+		String monitorCorbaname = null;
 		int id = 1;
+
+		execNode = new ExecutionNode[2];
+	
+		String[] evArgs = new String[2];
+		evArgs[0] = evHost;
+		evArgs[1] = evPort;
 		
-		String[] args = new String[2];
-		args[0] = host;
-		args[1] = port;
+		String[] monitorArgs = new String[2];
+		monitorArgs[0] = monitorHost;
+		monitorArgs[1] = monitorPort;
 
-		ORB orb = ORB.init(args, null);
 
-		//First Execution Node Data - Where LogMonitor and EventChannel will run
-		corbaname = "corbaname::" + host + ":" + port + "#"	+ EXEC_NODE_NAME ;
+		
 
-		System.out.println("Conectando ao execution node: " + corbaname);
+		evCorbaname = "corbaname::" + evHost + ":" + evPort + "#"	+ EXEC_NODE_NAME ;
+		monitorCorbaname = "corbaname::" + monitorHost + ":" + monitorPort + "#"	+ EXEC_NODE_NAME ;
 
-		//Connecting to Execution Node
+		System.out.println("Conectando ao execution node: " + evCorbaname);
+
+		ORB orb = ORB.init(evArgs, null);
+
+		//Connecting to EventManager/EventChannel Execution Node
 		try {
-			org.omg.CORBA.Object obj = orb.string_to_object(corbaname);
+			org.omg.CORBA.Object obj = orb.string_to_object(evCorbaname);
+			IComponent execNodeComp = IComponentHelper.narrow(obj);
+			Object ob = execNodeComp.getFacet(EXEC_NODE_FACET);
+			execNode[0] = ExecutionNodeHelper.narrow(ob);
+
+		} catch (SystemException ex) {
+			System.err.println("Erro ao conectar com o ExecutionNode " + evCorbaname);
+			System.exit(1);
+		}
+
+		orb = ORB.init(monitorArgs, null);
+
+		//Creating Log Monitor Execution Node
+		try {
+			org.omg.CORBA.Object obj = orb.string_to_object(monitorCorbaname);
 			IComponent execNodeComp = IComponentHelper.narrow(obj);
 			execNodeComp.startup();
 			Object ob = execNodeComp.getFacet(EXEC_NODE_FACET);
-			execNode = ExecutionNodeHelper.narrow(ob);
+			execNode[1] = ExecutionNodeHelper.narrow(ob);
 
 		} catch (SystemException ex) {
-			System.err.println("Erro ao conectar com o ExecutionNode " + corbaname);
+			System.err.println("Erro ao conectar com o ExecutionNode " + monitorCorbaname);
 			System.exit(1);
 		} catch (StartupFailed e) {
-			System.err.println("Startup do ExecutionNode " + corbaname + "falhou.");
+			System.err.println("Startup do ExecutionNode " + monitorCorbaname + "falhou.");
 			System.exit(1);
 		}
 
-		//Creating container at Execution Node
-		if (!this.createContainer(CONTAINER_NAME,execNode)) {
-			System.err.println("Erro criando o container em " + corbaname);
+		//Creating Log monitor Container
+		if (!this.createContainer(CONTAINER_NAME,execNode[1])) {
+			System.err.println("Erro criando o container em " + monitorCorbaname);
 			return false;
 		}
 
-		//Getting created container
-		IComponent container;
-		container = execNode.getContainer(CONTAINER_NAME);
+		//Retrieving EventChannel Container
+		IComponent evContainer;
+		evContainer = execNode[0].getContainer(EVCONTAINER_NAME);
+
+		//Retrieving LogMonitor Container
+		IComponent monitorContainer;
+		monitorContainer = execNode[1].getContainer(CONTAINER_NAME);
 
 		//Starting Container
 		try {
-			container.startup();
+			monitorContainer.startup();
 		} catch (StartupFailed e) {
-			System.out.println("Erro no startup do container em " + corbaname);
+			System.out.println("Erro no startup do container em " + monitorCorbaname);
 			System.exit(1);
 		}
 
-		//Getting Component Loader Facet from container
-		ComponentLoader loader = ComponentLoaderHelper.narrow(container
+		//Getting Component Collection Facet from container
+		ComponentCollection compCollection = ComponentCollectionHelper.narrow(evContainer
+			.getFacet("scs::container::ComponentCollection"));
+		if (compCollection == null) {
+			System.out.println("Erro ao retornar faceta loader em " + evCorbaname);
+			return false;
+		}
+
+		//Getting Component Loader Interface
+		ComponentLoader loader = ComponentLoaderHelper.narrow(monitorContainer
 			.getFacet("scs::container::ComponentLoader"));
 		if (loader == null) {
-			System.out.println("Erro ao retornar faceta loader em " + corbaname);
+			System.out.println("Erro ao retornar faceta loader em " + monitorCorbaname);
 			return false;
 		}
 
-		//Loading LogMonitor Component into container
-		ComponentHandle logMonitorHandle = null;
-		ComponentId logMonitorCompId = new ComponentId();
-		logMonitorCompId.name = "LogMonitor";
-		logMonitorCompId.version = 1;
+		//Getting Event Manager Reference
+		ComponentHandle eventMgrHandle = null;
+		ComponentId eventMgrCompId = new ComponentId();
+		eventMgrCompId.name = "EventManager";
+		eventMgrCompId.version = 1;
 
-		logMonitorHandle = createHandle(loader, logMonitorCompId);
-		if (logMonitorHandle == null) {
+		ComponentHandle [] handles = compCollection.getComponent(eventMgrCompId);
+		eventMgrHandle = handles[0];
+		if (eventMgrHandle == null) {
 			return false;
 		}
 
-		logMonitorComp = logMonitorHandle.cmp;
+		IComponent eventMgr = eventMgrHandle.cmp;
+
+		//Loading Log monitor Component
+		ComponentHandle logmonitorHandle = null;
+		ComponentId logmonitorCompId = new ComponentId();
+		logmonitorCompId.name = "LogMonitor";
+		logmonitorCompId.version = 1;
+
+
+		logmonitorHandle = createHandle(loader, logmonitorCompId);
+		if (logmonitorHandle == null) {
+			return false;
+		}
+
+		logMonitorComp = logmonitorHandle.cmp;
 
 		//Getting LogMonitor Receptacle, where event channel will connect
 		IReceptacles info1 = IReceptaclesHelper.narrow(logMonitorComp.getFacetByName("infoReceptacle"));
@@ -203,46 +254,23 @@ public class LogMonitorApp {
 			return false;
 		}
 		logMonitor.setId(1);
-		//System.out.println("Id do logMonitor: " + logMonitor.getId());
 
-		//Loading Event Manager into container
-		ComponentHandle eventMgrHandle = null;
-		ComponentId eventMgrCompId = new ComponentId();
-		eventMgrCompId.name = "EventManager";
-		eventMgrCompId.version = 1;
-
-		eventMgrHandle = createHandle(loader, eventMgrCompId);
-		if (eventMgrHandle == null) {
-			return false;
-		}
-
-		IComponent eventMgr = eventMgrHandle.cmp;
-
-		//Getting Event Factory Facet, to create event channels
-		ChannelFactory chFactory = ChannelFactoryHelper.narrow(eventMgr.getFacet("scs::event_service::ChannelFactory"));
-		if( chFactory== null ) {
-			System.out.println("Erro ao retornar ChannelFactory!");
-			return false;
-		}
-
-		//Getting Channel Collection Facet, to list created channels
+		//Getting Channel Collection Facet from Event Manager Component
 		ChannelCollection chCollection = ChannelCollectionHelper.narrow(eventMgr.getFacet("scs::event_service::ChannelCollection"));
 		if( chCollection == null ) {
-			System.out.println("Erro ao retornar ChannelCollection!");
+			System.out.println("WorkerInitializer::buildChannel - Erro ao retornar ChannelCollection !");
 			return false;
 		}
 
 		IComponent masterChannel = null;
 
 		try {
-			//Creating Event Channel
-			masterChannel = chFactory.create("MasterChannel");
-			masterChannel.startup();
-
+			//Getting event channel
+			masterChannel = chCollection.getChannel("MasterChannel");
+		
 			//Getting Event Channel Facet and Receptacle
 			EventSink eventSink = EventSinkHelper.narrow(masterChannel.getFacetByName("EventSink"));
-			IReceptacles eventSource = IReceptaclesHelper.narrow(masterChannel.getFacet("scs::core::IReceptacles"));
-
+		
 			//Connecting EventSink Facet, from Event Channel, to Log Monitor Receptacle
 			try {
 				info1.connect("LogMonitor", eventSink);
@@ -256,22 +284,12 @@ public class LogMonitorApp {
 				e.printStackTrace();
 			}
 
-			//Listing channels created by Event Manager
-			ChannelDescr channels[] = chCollection.getAll();
-
-			for (int j = 0; j < channels.length; j++) {
-				ChannelDescr ch = channels[j];
-				System.out.println("Canal: " + ch.name + " criado");
-
-			}
-
-
 		} catch (Exception e) {
-			System.out.println("Erro ao instanciar/conectar channel.");
+			System.out.println("WorkerInitializer::buildChannel - Erro ao instanciar channel.\n");
 			return false;
 		}
 
-
+	
 		return true;
 	}
 
@@ -281,23 +299,37 @@ public class LogMonitorApp {
 		InputStreamReader isr = new InputStreamReader ( System.in );
 		BufferedReader br = new BufferedReader ( isr );
 		String opt = "";
-		String host = "localhost";
-		String port = "1050";
+		String evHost = "localhost";
+		String evPort = "1050";
+		String monitorHost = "localhost";
+		String monitorPort = "1050";
 		String logFilename = "";
 		Integer logMonitorInterval = 120000;
 		
+		
 		try {
 			
-			System.out.print("ExecutionNode Host (default is localhost): ");
+			System.out.print("Event Channel ExecutionNode Host (default is localhost): ");
 			opt = br.readLine();
 			if(!opt.equals("")) {
-				host = opt;
+				evHost = opt;
 			}
 			opt = "";
-			System.out.print("ExecutionNode Port (default is 1050): ");
+			System.out.print("Event Channel ExecutionNode Port (default is 1050): ");
 			opt = br.readLine();
 			if(!opt.equals("")) {
-				port = opt;
+				evPort = opt;
+			}
+			System.out.print("Log monitor ExecutionNode Host (default is localhost): ");
+			opt = br.readLine();
+			if(!opt.equals("")) {
+				monitorHost = opt;
+			}
+			opt = "";
+			System.out.print("Log monitor ExecutionNode Port (default is 1050): ");
+			opt = br.readLine();
+			if(!opt.equals("")) {
+				monitorPort = opt;
 			}
 			opt = "";
 			System.out.print("Log file complete path (make sure you have permission): ");
@@ -316,7 +348,7 @@ public class LogMonitorApp {
 			
 			long start = System.currentTimeMillis();
 		
-			LogMonitorApp app = new LogMonitorApp(host, port);
+			LogMonitorApp app = new LogMonitorApp(evHost, evPort, monitorHost, monitorPort);
 		
 			//Sleep for debug
 			// CHANGED
@@ -329,8 +361,7 @@ public class LogMonitorApp {
 			System.out.println("Tempo total de execucao:" + (end - start));
 			app.stop();
 			
-		} catch (IOException ioe) {
-			System.err.println(ioe);
+			
 		} catch (SystemException ex) {
 			ex.printStackTrace();
 		} catch (Exception ex) {
@@ -359,7 +390,7 @@ public class LogMonitorApp {
 			//Stop tail and close tailed file
 			log.setTailing(false);
 			
-			execNode.stopContainer(CONTAINER_NAME); 
+			execNode[1].stopContainer(CONTAINER_NAME); 
 			Thread.sleep(1000);
 		} catch (Exception e ) {
 			System.err.println("Erro ao finalizar container");

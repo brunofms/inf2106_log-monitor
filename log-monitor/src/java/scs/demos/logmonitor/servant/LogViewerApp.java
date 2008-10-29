@@ -57,7 +57,7 @@ public class LogViewerApp {
 	private static final String EXEC_NODE_FACET = "scs::execution_node::ExecutionNode";
 	// CHANGED
 	private static final String CONTAINER_NAME = "LogViewerContainer";
-	private static final String EVCONTAINER_NAME = "LogMonitorContainer";
+	private static final String EVCONTAINER_NAME = "EventChannelContainer";
 
 	private ExecutionNode[] execNode = null;
 	private IComponent logMonitorComp = null;
